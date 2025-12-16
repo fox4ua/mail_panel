@@ -1,0 +1,15 @@
+ModuleCenter patch v7
+
+Добавлено:
+- Двухфазная установка/обновление из ZIP: распаковка в staging -> health-check -> commit (rename).
+- Гарантированный rollback на любом исключении.
+- Health-check после распаковки: загрузка манифеста + проверка route conflicts (если есть Config/Routes.php).
+- Защита от перезаписи System-модулей: upload/update для category=system запрещён.
+- Rescan как отдельный POST endpoint: /admin/system/modules/rescan + кнопка в UI.
+- Discovery cache (20s) в ModuleRegistry + сброс при deploy/install/uninstall.
+- При rescan/просмотре списка: конфликт route-name/URI помечает модуль как Broken: route conflict (страница не падает).
+
+Режим "только routes из модулей":
+- В app/Config/Routes.php нужно выставить:
+  $routes->setAutoRoute(false);
+- Оставить автоподключение Routes.php из модулей (glob modules/*/*/Config/Routes.php).
