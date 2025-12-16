@@ -22,7 +22,8 @@ class ModulesController extends AdminBaseController
         $svc = new ModuleService();
 
         if (!$svc->enable($name)) {
-            return redirect()->back()->with('error', 'Не удалось включить модуль');
+            $msg = $svc->getLastError() ?? 'Не удалось включить модуль';
+            return redirect()->back()->with('error', $msg);
         }
 
         return redirect()->to(site_url('admin/system/modules'))->with('success', 'Модуль включён');
@@ -33,18 +34,19 @@ class ModulesController extends AdminBaseController
         $svc = new ModuleService();
 
         if (!$svc->disable($name)) {
-            return redirect()->back()->with('error', 'Не удалось отключить модуль');
+            $msg = $svc->getLastError() ?? 'Не удалось отключить модуль';
+            return redirect()->back()->with('error', $msg);
         }
 
         return redirect()->to(site_url('admin/system/modules'))->with('success', 'Модуль отключён');
     }
 
-public function rescan()
-{
-    (new \Modules\System\ModuleCenter\Libraries\ModuleCenter\ModuleService())->rescan();
-    return redirect()->to(site_url('admin/system/modules'))->with('success', 'Rescan completed');
+    public function rescan()
+    {
+        $svc = new ModuleService();
+        $svc->rescan();
+        $svc->listModules(true);
+
+        return redirect()->to(site_url('admin/system/modules'))->with('success', 'Rescan completed');
+    }
 }
-
-
-}
-

@@ -33,11 +33,11 @@ class Module extends BaseModuleManifest
 
     public function install(): bool
     {
-        return service('moduleInstaller')->installSelf();
+        return (new ModuleInstaller())->installSelf();
     }
 
     public function uninstall(): bool
     {
-        return service('moduleInstaller')->uninstallSelf();
+        return (new ModuleInstaller())->uninstallSelf();
     }
 }

@@ -3,14 +3,14 @@
 namespace Modules\System\ModuleCenter\Controllers;
 
 use Modules\System\Core\Controllers\AdminBaseController;
-use Modules\System\ModuleCenter\Libraries\ModuleCenter\ModuleService;
 use Modules\System\ModuleCenter\Libraries\ModuleCenter\ModulePackageService;
+use Modules\System\ModuleCenter\Libraries\ModuleCenter\ModuleService;
 
 class ModuleInstallController extends AdminBaseController
 {
     public function uploadForm()
     {
-        return $this->render('Modules\System\ModuleCenter\Views\admin\upload', [
+        return $this->render('Modules\\System\\ModuleCenter\\Views\\admin\\upload', [
             'title' => 'Upload module',
         ]);
     }
@@ -49,7 +49,8 @@ class ModuleInstallController extends AdminBaseController
         $svc = new ModuleService();
 
         if (!$svc->installOrUpdate($name)) {
-            return redirect()->back()->with('error', $svc->getLastError() ?? 'Не удалось установить модуль');
+            $msg = $svc->getLastError() ?? 'Не удалось установить модуль';
+            return redirect()->back()->with('error', $msg);
         }
 
         return redirect()->to(site_url('admin/system/modules'))->with('success', 'Модуль установлен');
@@ -61,7 +62,8 @@ class ModuleInstallController extends AdminBaseController
         $res = $svc->uninstall($name, false);
 
         if (empty($res['ok'])) {
-            return redirect()->back()->with('error', (string)($res['error'] ?? 'Не удалось удалить модуль'));
+            $msg = (string)($res['error'] ?? $svc->getLastError() ?? 'Не удалось удалить модуль');
+            return redirect()->back()->with('error', $msg);
         }
 
         return redirect()->to(site_url('admin/system/modules'))->with('success', 'Модуль удалён');
