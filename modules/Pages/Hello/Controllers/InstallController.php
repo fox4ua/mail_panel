@@ -6,18 +6,25 @@ use Modules\Pages\Hello\Models\InstallModel;
 
 class InstallController
 {
+    private InstallModel $installModel;
+
+    public function __construct(?InstallModel $installModel = null)
+    {
+        $this->installModel = $installModel ?? new InstallModel();
+    }
+
     public function install(): bool
     {
-        return (new InstallModel())->addMenu();
+        return $this->installModel->addMenu();
     }
 
     public function uninstall(): bool
     {
-        return (new InstallModel())->delMenu();
+        return $this->installModel->delMenu();
     }
 
     public function update(string $from, string $to): bool
     {
-        return (new InstallModel())->addMenu();
+        return $this->installModel->addMenu();
     }
 }
