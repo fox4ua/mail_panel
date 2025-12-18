@@ -156,7 +156,7 @@ class Renderer
         $vars = array_merge($this->shared, $data);
 
         // чтобы можно было добавлять ассеты прямо из view/layout: $render->addCss(...)
-        $vars += ['render' => $this];
+        $vars['render'] = $this;
 
         $contentFile = $this->resolveViewFile($view);
         $content     = $this->renderFile($contentFile, $vars);
