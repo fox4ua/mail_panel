@@ -286,47 +286,9 @@ class Renderer
         return $out;
     }
 
-    protected function assertAssetUrlAllowed(string $url, string $kind): void
-    {
-        $url = trim($url);
-        if ($url === '') {
-            throw new RuntimeException($kind . ' URL is empty');
-        }
-
-        // Разрешаем только абсолютные пути от корня сайта: /assets/app.css
-        if ($url[0] === '/') {
-            return;
-        }
-
-        $lower = strtolower($url);
-
-        // Запрещаем опасные схемы
-        if (str_starts_with($lower, 'javascript:') || str_starts_with($lower, 'data:')) {
-            throw new RuntimeException($kind . ' URL scheme is not allowed: ' . $url);
-        }
-
-        // Запрещаем протокол-относительные URL: //cdn...
-        if (str_starts_with($lower, '//')) {
-            throw new RuntimeException($kind . ' protocol-relative URL is not allowed: ' . $url);
-        }
-
-        // Разрешаем только http/https
-        $scheme = parse_url($url, PHP_URL_SCHEME);
-        if (!is_string($scheme)) {
-            throw new RuntimeException($kind . ' URL must be absolute (https://...) or start with "/": ' . $url);
-        }
-
-        $scheme = strtolower($scheme);
-        if ($scheme === 'https') {
-            return;
-        }
-
-        if ($scheme === 'http' && $this->config->assetsAllowHttp) {
-            return;
-        }
-
-        throw new RuntimeException($kind . ' URL scheme not allowed: ' . $url);
-    }
+    /**
+     * Безопасность addCss/addJs
+     */
 
     protected function assertAssetUrlAllowed(string $url, string $kind): void
     {
