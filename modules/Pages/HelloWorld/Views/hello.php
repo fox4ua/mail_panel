@@ -1,14 +1,13 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title><?= esc($title ?? 'Hello') ?></title>
-</head>
-<body style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding: 24px;">
-  <h1><?= esc($title ?? 'Hello World') ?></h1>
-  <p>Module: <b>Pages/HelloWorld</b></p>
-  <p>Rendered at: <b><?= esc($time ?? '') ?></b></p>
-  <p>Try route alias (для проверки генерации URL): <code><?= esc(route_to('helloworld.index')) ?></code></p>
-</body>
-</html>
+<div class="card border-0 shadow-sm rounded-4">
+  <div class="card-body p-4">
+    <div class="d-flex align-items-center gap-2 mb-2">
+      <span class="badge text-bg-primary">Module</span>
+      <span class="badge text-bg-light">Pages/HelloWorld</span>
+    </div>
+
+    <h3 class="mb-1">Hello, <?= esc($name ?? '') ?></h3>
+    <div class="text-muted">
+      Это view загружено автоматически из текущего модуля и вставлено в общий шаблон.
+    </div>
+  </div>
+</div>
