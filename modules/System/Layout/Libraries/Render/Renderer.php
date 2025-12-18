@@ -66,67 +66,73 @@ class Renderer
             return $this;
         }
 
-        // не задваиваем, attrs дополняем (не перетирая уже заданные)
-        $this->css[$where][$key]['attrs'] = $this->mergeAttrs(
-            $this->css[$where][$key]['attrs'],
+        // дедуп + merge attrs (с логированием конфликтов в dev)
+        $this->css[$key]['attrs'] = $this->mergeAttrs(
+            $this->css[$key]['attrs'],
             $attrs,
-            $src,
+            $href,
             'css'
         );
 
         return $this;
     }
 
+
     /**
      * Добавить JS (дедуп по src). where: head|body
      * Правило: если один и тот же src добавили в body и в head — оставляем в head.
      */
-    public function addJs(string $src, string $where = 'body', array $attrs = []): self
-    {
-        $src = trim($src);
-        if ($src === '') {
-            return $this;
-        }
+      public function addJs(string $src, string $where = 'body', array $attrs = []): self
+      {
+          $src = trim($src);
+          if ($src === '') {
+              return $this;
+          }
 
-        $this->assertAssetUrlAllowed($src, 'JS');
+          $this->assertAssetUrlAllowed($src, 'JS');
 
-        $where = ($where === 'head') ? 'head' : 'body';
-        $key   = $this->normalizeAssetKey($src);
+          $where = ($where === 'head') ? 'head' : 'body';
+          $key   = $this->normalizeAssetKey($src);
 
-        // уже в head — body игнорируем, attrs дополним
-        if (isset($this->js['head'][$key])) {
-            $this->js['head'][$key]['attrs'] = $this->js['head'][$key]['attrs'] + $attrs;
-            return $this;
-        }
+          // Уже в head — body игнорируем, attrs мерджим (с логом конфликта)
+          if (isset($this->js['head'][$key])) {
+              $this->js['head'][$key]['attrs'] = $this->mergeAttrs(
+                  $this->js['head'][$key]['attrs'],
+                  $attrs,
+                  $src,
+                  'js'
+              );
+              return $this;
+          }
 
-        // был в body, но просят head — переносим в head
-        if ($where === 'head' && isset($this->js['body'][$key])) {
-            $existing = $this->js['body'][$key];
-            unset($this->js['body'][$key]);
+          // Есть в body, но просят head — переносим в head
+          if ($where === 'head' && isset($this->js['body'][$key])) {
+              $existing = $this->js['body'][$key];
+              unset($this->js['body'][$key]);
 
-            $this->js['head'][$key] = [
-                'src'   => $existing['src'],
-                'attrs' => $existing['attrs'] + $attrs,
-            ];
-            return $this;
-        }
+              $this->js['head'][$key] = [
+                  'src'   => $existing['src'],
+                  'attrs' => $this->mergeAttrs($existing['attrs'], $attrs, $src, 'js'),
+              ];
+              return $this;
+          }
 
-        // обычная установка
-        if (!isset($this->js[$where][$key])) {
-            $this->js[$where][$key] = ['src' => $src, 'attrs' => $attrs];
-            return $this;
-        }
+          // Нет такого файла — добавляем
+          if (!isset($this->js[$where][$key])) {
+              $this->js[$where][$key] = ['src' => $src, 'attrs' => $attrs];
+              return $this;
+          }
 
-        // дедуп + merge attrs
-        $this->js[$where][$key]['attrs'] = $this->mergeAttrs(
-            $this->js[$where][$key]['attrs'],
-            $attrs,
-            $src,
-            'js'
-        );
+          // Уже есть в выбранной зоне — дедуп + merge attrs
+          $this->js[$where][$key]['attrs'] = $this->mergeAttrs(
+              $this->js[$where][$key]['attrs'],
+              $attrs,
+              $src,
+              'js'
+          );
 
-        return $this;
-    }
+          return $this;
+      }
 
     /**
      * HTML для <head>: CSS
@@ -256,7 +262,7 @@ class Renderer
     }
 
 
-    function detectModuleViewsDir(string $controllerFile): ?string
+    protected function detectModuleViewsDir(string $controllerFile): ?string
     {
         $modulesBase = rtrim(ROOTPATH, '/\\') . DIRECTORY_SEPARATOR . 'modules' . DIRECTORY_SEPARATOR;
         $norm = str_replace('\\', '/', $controllerFile);
@@ -427,7 +433,16 @@ class Renderer
         $oldStr = is_scalar($old) || $old === null ? var_export($old, true) : gettype($old);
         $newStr = is_scalar($new) || $new === null ? var_export($new, true) : gettype($new);
 
-        error_log('[Renderer][asset-conflict] ' . $kind . ' ' . $asset
-            . ' attr "' . $key . '" конфликт: было ' . $oldStr . ', стало ' . $newStr);
+        $msg = sprintf(
+            '[Renderer][asset-conflict] %s %s attr "%s" conflict: old=%s new=%s',
+            $kind,
+            $asset,
+            $key,
+            $oldStr,
+            $newStr
+        );
+
+        // В CI4: log_message(level, message)
+        log_message('warning', $msg);
     }
 }
