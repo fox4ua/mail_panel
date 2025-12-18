@@ -67,7 +67,12 @@ class Renderer
         }
 
         // не задваиваем, attrs дополняем (не перетирая уже заданные)
-        $this->css[$key]['attrs'] = $this->css[$key]['attrs'] + $attrs;
+        $this->css[$where][$key]['attrs'] = $this->mergeAttrs(
+            $this->css[$where][$key]['attrs'],
+            $attrs,
+            $src,
+            'css'
+        );
 
         return $this;
     }
@@ -113,7 +118,12 @@ class Renderer
         }
 
         // дедуп + merge attrs
-        $this->js[$where][$key]['attrs'] = $this->js[$where][$key]['attrs'] + $attrs;
+        $this->js[$where][$key]['attrs'] = $this->mergeAttrs(
+            $this->js[$where][$key]['attrs'],
+            $attrs,
+            $src,
+            'js'
+        );
 
         return $this;
     }
@@ -173,16 +183,15 @@ class Renderer
 
     protected function resolveViewFile(string $view): string
     {
-        $view = trim($view, '/');
-        $view = str_replace(['\\', '..'], ['/', ''], $view);
+        $view = $this->sanitizeViewName($view);
+
+        $rel = str_replace('/', DIRECTORY_SEPARATOR, $view) . '.php';
 
         // 1) текущий модуль
         if ($this->config->useModuleViews && $this->controllerFile) {
             $moduleViewsDir = $this->detectModuleViewsDir($this->controllerFile);
             if ($moduleViewsDir !== null) {
-                $candidate = rtrim($moduleViewsDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR
-                    . str_replace('/', DIRECTORY_SEPARATOR, $view) . '.php';
-
+                $candidate = rtrim($moduleViewsDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $rel;
                 if (is_file($candidate)) {
                     return $candidate;
                 }
@@ -191,9 +200,7 @@ class Renderer
 
         // 2) app/Views fallback
         if ($this->config->fallbackToAppViews) {
-            $candidate = rtrim(APPPATH . 'Views', DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR
-                . str_replace('/', DIRECTORY_SEPARATOR, $view) . '.php';
-
+            $candidate = rtrim(APPPATH . 'Views', DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $rel;
             if (is_file($candidate)) {
                 return $candidate;
             }
@@ -202,40 +209,106 @@ class Renderer
         throw new RuntimeException('View file not found for: ' . $view);
     }
 
-    protected function detectModuleViewsDir(string $controllerFile): ?string
+    /**
+     * Разрешаем только безопасные имена: a-zA-Z0-9/_-
+     * Запрещаем пустые сегменты, "." и "..", нулевые байты, расширения.
+     */
+    protected function sanitizeViewName(string $view): string
     {
+        $view = str_replace('\\', '/', $view);
+        $view = trim($view);
+
+        // убираем ведущие/замыкающие слеши
+        $view = trim($view, '/');
+
+        if ($view === '') {
+            throw new RuntimeException('Empty view name');
+        }
+
+        // защита от нулевых байтов
+        if (str_contains($view, "\0")) {
+            throw new RuntimeException('Invalid view name');
+        }
+
+        // запрещаем расширение (чтобы не было "hello.php")
+        if (str_ends_with($view, '.php')) {
+            throw new RuntimeException('Do not include ".php" in view name: ' . $view);
+        }
+
+        // allowlist символов
+        if (!preg_match('~^[A-Za-z0-9/_-]+$~', $view)) {
+            throw new RuntimeException('Invalid view name: ' . $view);
+        }
+
+        // запрет "." и ".." сегментов + пустых сегментов
+        foreach (explode('/', $view) as $seg) {
+            if ($seg === '' || $seg === '.' || $seg === '..') {
+                throw new RuntimeException('Invalid view path segment in: ' . $view);
+            }
+        }
+
+        // (опционально) ограничение длины
+        if (strlen($view) > 200) {
+            throw new RuntimeException('View name too long');
+        }
+
+        return $view;
+    }
+
+
+    function detectModuleViewsDir(string $controllerFile): ?string
+    {
+        $modulesBase = rtrim(ROOTPATH, '/\\') . DIRECTORY_SEPARATOR . 'modules' . DIRECTORY_SEPARATOR;
         $norm = str_replace('\\', '/', $controllerFile);
-        $root = rtrim(str_replace('\\', '/', ROOTPATH), '/') . '/';
-        $modulesRoot = $root . 'modules/';
+        $base = str_replace('\\', '/', $modulesBase);
 
-        if (!str_starts_with($norm, $modulesRoot)) {
+        if (!str_starts_with($norm, $base)) {
             return null;
         }
 
-        // modules/<cat>/<Module>/Controllers/<X>.php => modules/<cat>/<Module>/Views
-        $controllersDir = str_replace('\\', '/', dirname($controllerFile));
-        $moduleDir = dirname($controllersDir);
+        $rel = trim(substr($norm, strlen($base)), '/');  // <Cat>/<Mod>/...
+        $parts = explode('/', $rel);
 
-        if (!is_dir($moduleDir)) {
+        if (count($parts) < 2) {
             return null;
         }
+
+        $cat = $parts[0];
+        $mod = $parts[1];
+
+        $moduleDir = rtrim(ROOTPATH, '/\\') . DIRECTORY_SEPARATOR . 'modules'
+            . DIRECTORY_SEPARATOR . $cat . DIRECTORY_SEPARATOR . $mod;
 
         $viewsDir = $moduleDir . DIRECTORY_SEPARATOR . 'Views';
         return is_dir($viewsDir) ? $viewsDir : null;
     }
 
+
     protected function renderFile(string $file, array $vars): string
     {
         if (!is_file($file)) {
-            throw new RuntimeException('Template file not found: ' . $file);
+            throw new \RuntimeException('Template file not found: ' . $file);
         }
+
+        // фиксируем текущий уровень буферизации, чтобы корректно очистить всё,
+        // что было открыто внутри шаблона, если там упадёт исключение
+        $level = ob_get_level();
 
         extract($vars, EXTR_SKIP);
 
         ob_start();
-        include $file;
-        return (string) ob_get_clean();
+        try {
+            include $file;
+            return (string) ob_get_clean();
+        } catch (\Throwable $e) {
+            // чистим только те буферы, которые открылись после $level
+            while (ob_get_level() > $level) {
+                ob_end_clean();
+            }
+            throw $e;
+        }
     }
+
 
     protected function normalizeAssetKey(string $path): string
     {
@@ -297,11 +370,6 @@ class Renderer
             throw new RuntimeException($kind . ' URL is empty');
         }
 
-        // Разрешаем только абсолютные пути от корня сайта: /assets/app.css
-        if ($url[0] === '/') {
-            return;
-        }
-
         $lower = strtolower($url);
 
         // Запрещаем опасные схемы
@@ -312,6 +380,11 @@ class Renderer
         // Запрещаем протокол-относительные URL: //cdn...
         if (str_starts_with($lower, '//')) {
             throw new RuntimeException($kind . ' protocol-relative URL is not allowed: ' . $url);
+        }
+
+        // Разрешаем только абсолютные пути от корня сайта: /assets/app.css
+        if ($url[0] === '/') {
+            return;
         }
 
         // Разрешаем только http/https
@@ -332,4 +405,29 @@ class Renderer
         throw new RuntimeException($kind . ' URL scheme not allowed: ' . $url);
     }
 
+    protected function mergeAttrs(array $existing, array $incoming, string $asset, string $kind): array
+    {
+        // определяем конфликты: ключ есть в обоих, но значение разное
+        foreach ($incoming as $k => $v) {
+            if (array_key_exists($k, $existing) && $existing[$k] !== $v) {
+                $this->logAssetConflict($kind, $asset, (string)$k, $existing[$k], $v);
+            }
+        }
+
+        // политика: первый победил (existing не перезаписываем)
+        return $existing + $incoming;
+    }
+
+    protected function logAssetConflict(string $kind, string $asset, string $key, mixed $old, mixed $new): void
+    {
+        if (!defined('ENVIRONMENT') || ENVIRONMENT === 'production') {
+            return;
+        }
+
+        $oldStr = is_scalar($old) || $old === null ? var_export($old, true) : gettype($old);
+        $newStr = is_scalar($new) || $new === null ? var_export($new, true) : gettype($new);
+
+        error_log('[Renderer][asset-conflict] ' . $kind . ' ' . $asset
+            . ' attr "' . $key . '" конфликт: было ' . $oldStr . ', стало ' . $newStr);
+    }
 }
