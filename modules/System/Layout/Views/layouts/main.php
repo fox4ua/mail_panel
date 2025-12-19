@@ -10,7 +10,7 @@
   <?= $render->renderJs('head') ?>
 </head>
 <body class="bg-light">
-
+<?= $render->module('menu') ?>
 <nav class="navbar navbar-light bg-white border-bottom">
   <div class="container-fluid">
     <a class="navbar-brand" href="/">App</a>

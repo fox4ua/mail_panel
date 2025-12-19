@@ -38,4 +38,8 @@ class Render extends BaseConfig
      * false => запретить HTTP
      */
     public bool $assetsAllowHttp = false;
+
+    public array $layoutModules = [
+        'menu' => 'Blocks/Menu:menu',
+    ];
 }

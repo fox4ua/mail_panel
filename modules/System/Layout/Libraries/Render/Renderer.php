@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 namespace Modules\System\Layout\Libraries\Render;
+use Modules\System\Layout\Libraries\Modules\LayoutModuleManager;
 
 use Modules\System\Layout\Config\Render as RenderConfig;
 use RuntimeException;
@@ -15,6 +16,7 @@ class Renderer
     protected ?string $title = null;
     protected ?string $cachedModuleViewsDir = null;
     protected bool $moduleViewsDirResolved = false;
+    protected ?LayoutModuleManager $modulesManager = null;
 
     /** @var array<string,mixed> */
     protected array $shared = [];
@@ -29,6 +31,34 @@ class Renderer
     ];
 
     public function __construct(protected RenderConfig $config) {}
+
+    public function module(string $name, array $data = []): string
+    {
+        return $this->modules()->render($name, $data);
+    }
+
+    public function modules(): LayoutModuleManager
+    {
+        return $this->modulesManager ??= new LayoutModuleManager($this, $this->config);
+    }
+
+    public function renderModuleView(string $category, string $module, string $view, array $data = []): string
+    {
+        $file = rtrim(ROOTPATH, '/\\') . DIRECTORY_SEPARATOR . 'modules'
+            . DIRECTORY_SEPARATOR . $category
+            . DIRECTORY_SEPARATOR . $module
+            . DIRECTORY_SEPARATOR . 'Views'
+            . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $view) . '.php';
+
+        if (!is_file($file)) {
+            throw new RuntimeException('Module view not found: ' . $category . '/' . $module . ':' . $view);
+        }
+
+        $vars = array_merge($this->shared, $data);
+        $vars['render'] = $this;
+
+        return $this->renderFile($file, $vars);
+    }
 
     public function addTitle(string $title, bool $append = false, string $separator = ' — '): self
     {
