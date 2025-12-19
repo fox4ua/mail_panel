@@ -12,6 +12,9 @@ class Renderer
 {
     protected ?string $controllerClass = null;
     protected ?string $controllerFile  = null;
+    protected ?string $title = null;
+    protected ?string $cachedModuleViewsDir = null;
+    protected bool $moduleViewsDirResolved = false;
 
     /** @var array<string,mixed> */
     protected array $shared = [];
@@ -27,6 +30,37 @@ class Renderer
 
     public function __construct(protected RenderConfig $config) {}
 
+    public function addTitle(string $title, bool $append = false, string $separator = ' — '): self
+    {
+        $title = trim($title);
+        if ($title === '') {
+            return $this;
+        }
+
+        if ($append && $this->title !== null && $this->title !== '') {
+            $this->title = $this->title . $separator . $title;
+        } else {
+            $this->title = $title;
+        }
+
+        return $this;
+    }
+
+    public function getTitle(?string $fallback = null): string
+    {
+        $t = trim((string) $this->title);
+        if ($t !== '') {
+            return $t;
+        }
+
+        // fallback: сначала то, что передали, иначе $title из view/layout, иначе "App"
+        $fallback = $fallback ?? ($this->shared['title'] ?? null);
+        $fallback = is_string($fallback) ? trim($fallback) : '';
+
+        return $fallback !== '' ? $fallback : 'App';
+    }
+
+
     public function setController(object|string $controller): self
     {
         $this->controllerClass = is_object($controller) ? get_class($controller) : $controller;
@@ -34,12 +68,32 @@ class Renderer
         try {
             $ref = new \ReflectionClass($this->controllerClass);
             $this->controllerFile = $ref->getFileName() ?: null;
-        } catch (Throwable) {
+        } catch (\Throwable) {
             $this->controllerFile = null;
         }
 
+        // сброс кэша пути Views при смене контроллера
+        $this->cachedModuleViewsDir = null;
+        $this->moduleViewsDirResolved = false;
+
         return $this;
     }
+
+    protected function getModuleViewsDirCached(): ?string
+    {
+        if ($this->moduleViewsDirResolved) {
+            return $this->cachedModuleViewsDir;
+        }
+
+        $this->cachedModuleViewsDir = $this->controllerFile
+            ? $this->detectModuleViewsDir($this->controllerFile)
+            : null;
+
+        $this->moduleViewsDirResolved = true;
+
+        return $this->cachedModuleViewsDir;
+    }
+
 
     public function share(string $key, mixed $value): self
     {
@@ -195,9 +249,12 @@ class Renderer
 
         // 1) текущий модуль
         if ($this->config->useModuleViews && $this->controllerFile) {
-            $moduleViewsDir = $this->detectModuleViewsDir($this->controllerFile);
+            $moduleViewsDir = $this->getModuleViewsDirCached();
+
             if ($moduleViewsDir !== null) {
-                $candidate = rtrim($moduleViewsDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $rel;
+                $candidate = rtrim($moduleViewsDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR
+                    . str_replace('/', DIRECTORY_SEPARATOR, $view) . '.php';
+
                 if (is_file($candidate)) {
                     return $candidate;
                 }
