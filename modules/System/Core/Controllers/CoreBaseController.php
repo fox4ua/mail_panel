@@ -7,7 +7,7 @@ use CodeIgniter\Controller;
 use CodeIgniter\HTTP\RequestInterface;
 use CodeIgniter\HTTP\ResponseInterface;
 use Psr\Log\LoggerInterface;
-use Modules\System\Layout\Libraries\Render\Renderer;
+use Modules\System\Layout\Libraries\Renderer;
 
 /**
  * Базовый контроллер модульной системы.

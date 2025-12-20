@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Modules\System\Layout\Libraries\Modules;
 
 use Modules\System\Layout\Config\Render as RenderConfig;
-use Modules\System\Layout\Libraries\Render\Renderer;
+use Modules\System\Layout\Libraries\Renderer;
 use RuntimeException;
 
 final class LayoutModuleManager
