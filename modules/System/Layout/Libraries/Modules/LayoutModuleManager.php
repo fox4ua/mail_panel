@@ -7,25 +7,74 @@ namespace Modules\System\Layout\Libraries\Modules;
 use Modules\System\Layout\Config\Render as RenderConfig;
 use Modules\System\Layout\Libraries\Renderer;
 use RuntimeException;
+use Throwable;
 
 class LayoutModuleManager
 {
     /** @var array<string, array{0:string,1:string,2:string}> */
     protected array $parseCache = [];
 
-    public function __construct(protected Renderer $renderer, protected RenderConfig $config) {}
+    public function __construct(
+        protected Renderer $renderer,
+        protected RenderConfig $config
+    ) {}
 
-    public function render(string $name, array $data = []): string {
-      [$category, $module, $view] = $this->parseNameCached($name);
-      return $this->renderer->renderModuleView($category, $module, $view, $data);
+    public function render(string $name, array $data = []): string
+    {
+        [$category, $module, $view] = $this->parseNameCached($name);
+
+        // ВАЖНО: здесь добавляем подготовку данных для блоков
+        $data = $this->prepareModuleData($category, $module, $view, $data);
+
+        return $this->renderer->renderModuleView($category, $module, $view, $data);
     }
 
-    protected function parseNameCached(string $name): array {
-      $key = $name;
-      if (isset($this->parseCache[$key])) {
-        return $this->parseCache[$key];
-      }
-      return $this->parseCache[$key] = $this->parseName($name);
+    /**
+     * Адаптеры данных для блоков.
+     * Именно из-за отсутствия этого слоя defaultRegions у тебя не работал.
+     */
+    protected function prepareModuleData(string $category, string $module, string $view, array $data): array
+    {
+        // Blocks/Menu:*  -> build(menuKey, options)
+        if ($category === 'Blocks' && $module === 'Menu') {
+            $menuKey = (string) ($data['menuKey'] ?? $data['key'] ?? 'main');
+            $options = (isset($data['options']) && is_array($data['options'])) ? $data['options'] : [];
+
+            try {
+                if (class_exists(\Modules\Blocks\Menu\Libraries\MenuBlock::class)) {
+                    $builder = new \Modules\Blocks\Menu\Libraries\MenuBlock();
+                    return $builder->build($menuKey, $options);
+                }
+            } catch (Throwable $e) {
+                // fail-open: не ломаем страницу
+                return $data;
+            }
+        }
+
+        // Blocks/UserProfile:header -> build(options)
+        if ($category === 'Blocks' && $module === 'UserProfile' && $view === 'header') {
+            $options = (isset($data['options']) && is_array($data['options'])) ? $data['options'] : $data;
+
+            try {
+                if (class_exists(\Modules\Blocks\UserProfile\Libraries\UserProfileHeaderBlock::class)) {
+                    $builder = new \Modules\Blocks\UserProfile\Libraries\UserProfileHeaderBlock();
+                    return $builder->build($options);
+                }
+            } catch (Throwable $e) {
+                return $data;
+            }
+        }
+
+        return $data;
+    }
+
+    protected function parseNameCached(string $name): array
+    {
+        $key = $name;
+        if (isset($this->parseCache[$key])) {
+            return $this->parseCache[$key];
+        }
+        return $this->parseCache[$key] = $this->parseName($name);
     }
 
     /**
@@ -36,9 +85,6 @@ class LayoutModuleManager
      *  - "Blocks/Menu"       => Blocks/Menu/index
      *  - "blocks/menu:top"   => Blocks/Menu/top
      *  - "Blocks/Menu:menu"  => Blocks/Menu/menu
-     *
-     * category по умолчанию: Blocks
-     * view по умолчанию: index
      */
     protected function parseName(string $name): array
     {
@@ -69,11 +115,10 @@ class LayoutModuleManager
         $parts = explode('/', $name);
 
         if (count($parts) === 1) {
-            // ВАЖНО: у тебя реальная папка "Blocks", а не "blocks"
+            // по умолчанию это блок
             $category = 'Blocks';
             $module   = $parts[0];
         } elseif (count($parts) === 2) {
-            // ВАЖНО: не strtolower(), иначе сломаешь Linux-пути
             $category = $this->studly($parts[0]); // blocks => Blocks, pages => Pages, system => System
             $module   = $parts[1];
         } else {

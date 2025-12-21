@@ -43,7 +43,7 @@ class Render extends BaseConfig
         'header' => [
         ],
         'left' => [
-            ['name' => 'Menu:menu', 'data' => []],
+          ['name' => 'Menu:index', 'data' => ['menuKey' => 'main']],
         ],
     ];
 }

@@ -31,33 +31,68 @@ class Renderer
 
     public function __construct(protected RenderConfig $config) {}
 
-    // -------------------------
-    // Lazy getters (однотипно)
-    // -------------------------
 
-    protected function assets(): AssetManager
-    {
-        return $this->assets ??= new AssetManager($this->config);
+
+    protected function assets(): AssetManager {
+      return $this->assets ??= new AssetManager($this->config);
+    }
+    
+    /* add / get Title */
+    public function addTitle(string $title, bool $append = false, string $separator = ' — '): self {
+      $title = trim($title);
+      if ($title === '') {
+        return $this;
+      }
+      if ($append && $this->title !== null && $this->title !== '') {
+        $this->title = $this->title . $separator . $title;
+      } else {
+        $this->title = $title;
+      }
+      return $this;
+    }
+    public function getTitle(?string $fallback = null): string {
+      $title = trim((string) $this->title);
+      if ($title !== '') {
+        return $title;
+      }
+      $fallback = $fallback ?? ($this->shared['title'] ?? null);
+      $fallback = is_string($fallback) ? trim($fallback) : '';
+      return $fallback !== '' ? $fallback : 'App';
+    }
+    /* add / render CSS */
+    public function addCss(string $href, array $attrs = []): self {
+      $this->assets()->addCss($href, $attrs);
+      return $this;
+    }
+    public function renderCss(): string {
+      return $this->assets()->renderCss();
+    }
+    /* add / render JS */
+    public function addJs(string $src, string $where = 'body', array $attrs = []): self {
+      $this->assets()->addJs($src, $where, $attrs);
+      return $this;
+    }
+    public function renderJs(string $where = 'body'): string {
+      return $this->assets()->renderJs($where);
     }
 
-    protected function viewLocator(): ViewLocator
-    {
-        return $this->viewLocator ??= new ViewLocator($this->config);
+
+
+
+
+
+    protected function viewLocator(): ViewLocator {
+      return $this->viewLocator ??= new ViewLocator($this->config);
+    }
+    protected function phpRenderer(): PhpFileRenderer {
+      return $this->phpRenderer ??= new PhpFileRenderer();
+    }
+    protected function regions(): RegionManager {
+      return $this->regionsManager ??= new RegionManager($this, $this->config);
     }
 
-    protected function phpRenderer(): PhpFileRenderer
-    {
-        return $this->phpRenderer ??= new PhpFileRenderer();
-    }
-
-    protected function regions(): RegionManager
-    {
-        return $this->regionsManager ??= new RegionManager($this, $this->config);
-    }
-
-    public function modules(): LayoutModuleManager
-    {
-        return $this->modulesManager ??= new LayoutModuleManager($this, $this->config);
+    protected function modules(): LayoutModuleManager {
+      return $this->modulesManager ??= new LayoutModuleManager($this, $this->config);
     }
 
     // -------------------------
@@ -110,106 +145,39 @@ class Renderer
     // -------------------------
     // Title / Controller
     // -------------------------
-
-    public function addTitle(string $title, bool $append = false, string $separator = ' — '): self
-    {
-        $title = trim($title);
-        if ($title === '') {
-            return $this;
-        }
-
-        if ($append && $this->title !== null && $this->title !== '') {
-            $this->title = $this->title . $separator . $title;
-        } else {
-            $this->title = $title;
-        }
-
-        return $this;
-    }
-
-    public function getTitle(?string $fallback = null): string
-    {
-        $t = trim((string) $this->title);
-        if ($t !== '') {
-            return $t;
-        }
-
-        $fallback = $fallback ?? ($this->shared['title'] ?? null);
-        $fallback = is_string($fallback) ? trim($fallback) : '';
-
-        return $fallback !== '' ? $fallback : 'App';
-    }
-
     public function setController(object|string $controller): self
     {
         $this->controllerClass = is_object($controller) ? get_class($controller) : $controller;
-
         try {
             $ref = new \ReflectionClass($this->controllerClass);
             $this->controllerFile = $ref->getFileName() ?: null;
         } catch (\Throwable) {
             $this->controllerFile = null;
         }
-
         $this->viewLocator()->setControllerFile($this->controllerFile);
-
         return $this;
     }
-
     public function share(string $key, mixed $value): self
     {
         $this->shared[$key] = $value;
         return $this;
     }
-
-    // -------------------------
-    // Assets
-    // -------------------------
-
-    public function addCss(string $href, array $attrs = []): self
-    {
-        $this->assets()->addCss($href, $attrs);
-        return $this;
-    }
-
-    public function addJs(string $src, string $where = 'body', array $attrs = []): self
-    {
-        $this->assets()->addJs($src, $where, $attrs);
-        return $this;
-    }
-
-    public function renderCss(): string
-    {
-        return $this->assets()->renderCss();
-    }
-
-    public function renderJs(string $where = 'body'): string
-    {
-        return $this->assets()->renderJs($where);
-    }
-
     // -------------------------
     // View
     // -------------------------
-
     public function view(string $view, array $data = [], string|null $layoutFile = null): string
     {
-        // дефолтные регионы поднимаем автоматически (без участия контроллеров страниц)
-        $this->regions()->bootstrapDefaults();
-
-        $vars = array_merge($this->shared, $data);
-        $vars['render'] = $this;
-
-        $contentFile = $this->viewLocator()->resolve($view);
-        $content     = $this->phpRenderer()->render($contentFile, $vars);
-
-        $layoutFile = ($layoutFile === null) ? $this->config->layoutFile : $layoutFile;
-        if ($layoutFile === '') {
-            return $content;
-        }
-
-        $vars['content'] = $content;
-
-        return $this->phpRenderer()->render($layoutFile, $vars);
+      // дефолтные регионы поднимаем автоматически (без участия контроллеров страниц)
+      $this->regions()->bootstrapDefaults();
+      $vars = array_merge($this->shared, $data);
+      $vars['render'] = $this;
+      $contentFile = $this->viewLocator()->resolve($view);
+      $content     = $this->phpRenderer()->render($contentFile, $vars);
+      $layoutFile = ($layoutFile === null) ? $this->config->layoutFile : $layoutFile;
+      if ($layoutFile === '') {
+        return $content;
+      }
+      $vars['content'] = $content;
+      return $this->phpRenderer()->render($layoutFile, $vars);
     }
 }
