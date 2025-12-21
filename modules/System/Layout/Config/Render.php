@@ -39,7 +39,11 @@ class Render extends BaseConfig
      */
     public bool $assetsAllowHttp = false;
 
-    public array $layoutModules = [
-        'menu' => 'Blocks/Menu:menu',
+    public array $defaultRegions = [
+        'header' => [
+        ],
+        'left' => [
+            ['name' => 'Menu:menu', 'data' => []],
+        ],
     ];
 }
